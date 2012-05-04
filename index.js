@@ -1,21 +1,77 @@
 // koth = require("knockout-template-helper");
-// app.use('/template.html', koth(__dirname+'/templates', { watch : true }));
+// koth(
+//      __dirname+'/templates', 
+//      { watch : true, prepend : ['./top.html'], append : ['./bottom.html'] },
+//      function(handler) { app.use('/myapp.html', handler); }
+//  );
 
 fs = require('fs');
 walker = require('walker');
 et = require('elementtree');
 async = require('async');
 
-module.exports = koth;
 
 var slashdot = function(s) { return s.replace(/\//g, '.').replace('.',''); };
 
-var koth = function(dir, opts) {
-    opts = opts ? opts : {};
-    var templates = {};
+var koth = function(dir, opts, callback) {
+    opts = opts ? opts : {watch: false, prepend:[], append:[]};
+    callback = callback ? callback : function(){}; 
+    var cache = { templates : [], prepends : [], appends : [] };
+
+    if(opts.watch) {
+        var chokidar = require('chokidar');
+        console.log(dir);
+        //watch directory of templates
+        var watchTemplates = chokidar.watch();
+        watcherTemplates.add(dir);
+        watcherTemplates.on('add', reloadTemplates);
+        watcherTemplates.on('change', reloadTemplates);
+        watcherTemplates.on('unlink', reloadTemplates);
+        
+        //watch fixtures
+        watchFixtures = chokidar.watch();
+        watchFixtures.add(opts.prepend.concat(opts.append));
+        watcherFixtures.on('add', reloadFixtures);
+        watcherFixtures.on('change', reloadFixtures);
+        watcherFixtures.on('unlink', reloadFixtures);
+    }
     
-    var loadTemplates = function(cb) {
-        var templates = {};
+  
+    var reloadFixtures = function(cb) {
+        /* Updates cache.prepends and cache.appends */
+        var ps = [], as = []; 
+        async.forEach([[ps,opts.prepend],[as,opts.append]], function(set,ecb) {
+            var list = set[0], files = set[1];
+            async.forEachSeries(files, function(file, escb) {
+                fs.readFile(file, function(err, data) {
+                    if(err) { 
+                        escb(err);
+                    } else {
+                        list.push(data);
+                        escb();
+                    }
+                });
+            }, ecb);
+
+        }, function(err) {
+            if(err) cb(err);
+            cache.prepends = ps;
+            cache.appends = as;
+            cb();
+        } );
+    };
+
+    var reloadTemplates = function(cb) {
+        /* Updates cache.templates */
+        findTemplates(function(err, templates) {
+            if(err) cb(err);
+            cache.templates = templates;
+            cb();
+        });
+    };
+
+    var findTemplates = function(cb) {
+        var templates = [];
         files = [];
         walker(dir).
             on('file', function(f,stat){ files.push(f); }).
@@ -33,30 +89,34 @@ var koth = function(dir, opts) {
                                 var tpl = tpls[i];
                                 var id = tpl.attrib['id'];
                                 var newPath = path + '.' + id;
-                                console.log(newPath);
                                 tpl.attrib['id'] = newPath;
                                 var markup = et.tostring(
                                     tpl, {'xml_declaration': false });
-                                console.log(markup);
-                                templates[newPath] = markup;
-                                ecb();
+                                templates.push(markup);
                             }
+                            ecb();
                         }
                     });
                 }, function(err) {cb(null, templates);});
             });
     };
-    
-    loadTemplates(function(err, templates) {
-        if(err) throw err;
-        console.log("---------");
-        console.log(templates);
-    });
 
-    if(opts.watch) {
-        var chokidar = require('chokidar');
-        var watcher = chokidar.watch(dir);
+    var handler = function(req, res) {
+        if(opts.watch || !cache.output) { 
+            //we're either watching files or first-run, generate output
+            var out = "";
+            out += cache.prepends.join("");
+            out += cache.templates.join("");
+            out += cache.appends.join("");
+            cache.output = out;
+        }
+        res.send(cache.output);
     }
+
+    //entry point
+    reloadFixtures(function(){reloadTemplates(function(){callback(handler)});});
+
+
 };
 
-koth('/home/pomke/code/knockout-template-helper/templates');
+module.exports = koth;
