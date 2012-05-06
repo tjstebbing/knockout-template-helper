@@ -17,8 +17,8 @@ add to the master template.
 the compiled html.
 
 
-javascript`````
 
+```javascript
 koth = require('knockout-template-helper');
 
 app = express.createServer();
@@ -27,6 +27,6 @@ koth(__dirname+'master.html', __dirname+'/templates', true, function(handler) {
 });
 
 
-`````
+```
 
 
