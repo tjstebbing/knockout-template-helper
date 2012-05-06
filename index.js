@@ -1,9 +1,4 @@
-// koth = require("knockout-template-helper");
-// koth(
-//      __dirname+'/templates', 
-//      { watch : true, prepend : ['./top.html'], append : ['./bottom.html'] },
-//      function(handler) { app.use('/myapp.html', handler); }
-//  );
+
 
 fs = require('fs');
 walker = require('walker');
@@ -12,53 +7,22 @@ async = require('async');
 
 
 var slashdot = function(s) { return s.replace(/\//g, '.').replace('.',''); };
+var noop = function(){};
 
-var koth = function(dir, opts, callback) {
-    opts = opts ? opts : {watch: false, prepend:[], append:[]};
+var koth = function(master, dir, watch, callback) {
     callback = callback ? callback : function(){}; 
-    var cache = { templates : [], prepends : [], appends : [] };
+    var cache = { templates : [], master : null};
 
-    if(opts.watch) {
-        var chokidar = require('chokidar');
-        console.log(dir);
-        //watch directory of templates
-        var watchTemplates = chokidar.watch();
-        watcherTemplates.add(dir);
-        watcherTemplates.on('add', reloadTemplates);
-        watcherTemplates.on('change', reloadTemplates);
-        watcherTemplates.on('unlink', reloadTemplates);
-        
-        //watch fixtures
-        watchFixtures = chokidar.watch();
-        watchFixtures.add(opts.prepend.concat(opts.append));
-        watcherFixtures.on('add', reloadFixtures);
-        watcherFixtures.on('change', reloadFixtures);
-        watcherFixtures.on('unlink', reloadFixtures);
-    }
-    
-  
-    var reloadFixtures = function(cb) {
-        /* Updates cache.prepends and cache.appends */
-        var ps = [], as = []; 
-        async.forEach([[ps,opts.prepend],[as,opts.append]], function(set,ecb) {
-            var list = set[0], files = set[1];
-            async.forEachSeries(files, function(file, escb) {
-                fs.readFile(file, function(err, data) {
-                    if(err) { 
-                        escb(err);
-                    } else {
-                        list.push(data);
-                        escb();
-                    }
-                });
-            }, ecb);
-
-        }, function(err) {
-            if(err) cb(err);
-            cache.prepends = ps;
-            cache.appends = as;
-            cb();
-        } );
+ 
+    var reloadMaster = function(cb) {
+        fs.readFile(master, function(err, data) {
+            if(err) { 
+                cb(err);
+            } else {
+                cache.master = data+"";
+                cb();
+            }
+        });
     };
 
     var reloadTemplates = function(cb) {
@@ -90,9 +54,7 @@ var koth = function(dir, opts, callback) {
                                 var id = tpl.attrib['id'];
                                 var newPath = path + '.' + id;
                                 tpl.attrib['id'] = newPath;
-                                var markup = et.tostring(
-                                    tpl, {'xml_declaration': false });
-                                templates.push(markup);
+                                templates.push(et.tostring(tpl));
                             }
                             ecb();
                         }
@@ -102,19 +64,27 @@ var koth = function(dir, opts, callback) {
     };
 
     var handler = function(req, res) {
-        if(opts.watch || !cache.output) { 
+        if(watch || !cache.output) { 
             //we're either watching files or first-run, generate output
-            var out = "";
-            out += cache.prepends.join("");
-            out += cache.templates.join("");
-            out += cache.appends.join("");
-            cache.output = out;
+            try {
+                cache.output = cache.master.replace("</body>", 
+                        cache.templates.join("")+"</body>");
+            } catch(e) {
+                throw e;
+            }
         }
         res.send(cache.output);
     }
 
+    if(watch) {
+        var chokidar = require('chokidar');
+        chokidar.watch(dir).on('change', function(){reloadTemplates(noop);});
+        chokidar.watch(master).on('change', function(){reloadMaster(noop);});
+
+    }
+ 
     //entry point
-    reloadFixtures(function(){reloadTemplates(function(){callback(handler)});});
+    reloadMaster(function(){reloadTemplates(function(){callback(handler)});});
 
 
 };
