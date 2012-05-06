@@ -6,14 +6,14 @@ into one html file. This is very useful useful if you're writing applications wi
 
 require returns a function koth which takes: 
 
-'''master template''', your main html file which will use the templates.
+* **master template**, your main html file which will use the templates.
 
-'''template directory''', a directory (can be nested) of templates in html files to compress and
+* **template directory**, a directory (can be nested) of templates in html files to compress and
 add to the master template.
 
-'''watch''', boolean, if true all files will be watched for changes and update automatically.
+* **watch**, boolean, if true all files will be watched for changes and update automatically.
 
-'''callback''', will be passed a handler function which takes a request, response and returns
+* **callback**, will be passed a handler function which takes a request, response and returns
 the compiled html.
 
 
