@@ -1,7 +1,7 @@
 {
   "name": "knockout-template-helper",
   "description": "A small node.js library that compresses a nested directory of html snippets into one knockout.js template.",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "keywords": ["knockout", "watch", "template"],
   "homepage": "https://github.com/pomke/knockout-template-helper",
   "author": "Pomke",
