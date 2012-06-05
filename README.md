@@ -10,7 +10,7 @@ include a *body* tag, this is the page which hosts and makes use of your
 knockout templates.
 
 A template file is an html document with one or more *script* tags representing
-a (knockout template)[http://knockoutjs.com/documentation/template-binding.html].
+a [knockout template](http://knockoutjs.com/documentation/template-binding.html).
 
 A template has an id attribute unique to its template file. Koth rewrites these
 ids to provide a dot-path namespace for templates, using the template filename,
