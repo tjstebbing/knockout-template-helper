@@ -63,7 +63,7 @@ Would remap these templates to make them available in master template like so:
 ```
 
 This is a particularly simple way to manage templates with the 
-added benifit of namespaces. 
+added benefit of namespaces. 
 
 
 API
