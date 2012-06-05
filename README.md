@@ -62,7 +62,7 @@ Would remap these templates to make them available in master template like so:
 <div data-bind="template: { name: 'admin.users.groups', data: groups }"></div>
 ```
 
-This is a particularly simple way to manage templates and  brinngs in the 
+This is a particularly simple way to manage templates with the 
 added benifit of namespaces. 
 
 
