@@ -3,7 +3,7 @@ KOTH (knockout-template-helper)
 
 A small node.js library that combines a master template and some knockout templates 
 into one html file. This is very useful useful if you're writing applications with 
-node and knockout.js.
+node and [knockout.js](http://knockoutjs.com).
 
 The concept is fairly basic, a master template is an html document which must 
 include a *body* tag, this is the page which hosts and makes use of your 

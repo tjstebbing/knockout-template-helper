@@ -8,7 +8,17 @@ var async = require('async');
 var slashdot = function(s) { return s.replace(/\/|\\/g, '.').replace('.',''); };
 var noop = function(){};
 
-var reloadMaster = function(cache, cb) {
+var newCache = function() {
+    return { templates : [], master : null};
+};
+
+var processCache = function(cache) {
+    cache.output = cache.master.replace("</body>",
+            cache.templates.join("")+"</body>");
+    return cache.output;
+};
+
+var loadMaster = function(master, cache, cb) {
     fs.readFile(master, function(err, data) {
         if(err) {
             cb(err);
@@ -19,21 +29,20 @@ var reloadMaster = function(cache, cb) {
     });
 };
 
-var reloadTemplates = function(cache, cb) {
-    findTemplates(function(err, templates) {
+var loadTemplates = function(map, cache, cb) {
+    loadTemplates(map, function(err, templates) {
         if(err) cb(err);
         cache.templates = templates;
         cb();
     });
 };
 
-var newCache = function() {
-    return { templates : [], master : null};
-};
-
-var processCache = function(cache) {
-    cache.output = cache.master.replace("</body>",
-            cache.templates.join("")+"</body>");
+var loadTemplatesDir = function(dir, cache, cb) {
+    loadTemplatesDir(dir, function(err, templates) {
+        if(err) cb(err);
+        cache.templates = templates;
+        cb();
+    });
 };
 
 var parseTemplate = function(path, data, list, prefix) {
@@ -91,16 +100,30 @@ var loadTemplatesDir = function(dir, cb) {
         });
 };
 
-
+// API
 
 exports.flatten(master, templates, callback) {
     /* flattens a mapping of templates into a master template, callback is
      * fired with the result as a string */
+    callback = callback ? callback : noop;
+    var cache = newCache();
+    loadMaster(master, cache, function() {
+        loadTemplates(templates, cache, function() {
+            callback(processCache(cache));
+        });
+    });
 };
 
 exports.flattenDir(master, dir, callback) {
     /* flattens a mapping of templates into a master template, callback is
      * fired with the result as a string */
+    callback = callback ? callback : noop;
+    var cache = newCache();
+    loadMaster(master, cache, function() {
+        loadTemplatesDir(dir, cache, function() {
+            callback(processCache(cache));
+        });
+    });
 };
 
 
@@ -109,13 +132,59 @@ exports.watch(master, templates, callback) {
      * template, callback will be fired with the results as a string initially
      * and every time a file changes.
      */
+    callback = callback ? callback : noop;
+    var cache = newCache();
+    var chokidar = require('chokidar');
+
+    _.each(templates, function(v) {
+        chokidar.watch(v).on('change', function() {
+            loadTemplates(templates, cache, function() {
+                callback(processCache(cache));
+            });
+        });
+    });
+
+    chokidar.watch(master).on('change', function() {
+        loadMaster(master, cache, function() {
+            callback(processCache(cache));
+        });
+    });
+
+    loadMaster(master, cache, function() {
+        loadTemplates(templates, cache, function() {
+            callback(processCache(cache));
+        });
+    });
+
 
 };
-exports.watchDir(master, templates, callback) {
+
+exports.watchDir(master, dir, callback) {
     /* watch a nested directory of templates and flatten them into a master
      * template, callback will be fired with the results as a string initially
      * and every time a file changes.
      */
+    callback = callback ? callback : noop;
+    var cache = newCache();
+    var chokidar = require('chokidar');
+
+    chokidar.watch(dir).on('change', function() {
+        loadTemplatesDir(dir, cache, function() {
+            callback(processCache(cache));
+        });
+    });
+
+    chokidar.watch(master).on('change', function() {
+        loadMaster(master, cache, function() {
+            callback(processCache(cache));
+        });
+    });
+
+    loadMaster(master, cache, function() {
+        loadTemplatesDir(dir, cache, function() {
+            callback(processCache(cache));
+        });
+    });
 
 };
 
@@ -142,19 +211,25 @@ exports.connectHandler = function(master, templates, watch, callback) {
 
     if(watch) {
         var chokidar = require('chokidar');
-        _.each(cache.templates, function(template) {
-            chokidar.watch(template).on('change', function(){
-                reloadTemplates(cache, noop);
+
+        _.each(templates, function(v) {
+            chokidar.watch(v).on('change', function() {
+                loadTemplates(templates, cache, noop);
             });
         });
-        chokidar.watch(master).on('change', function(){reloadMaster(cache, noop);});
+
+        chokidar.watch(master).on('change', function() {
+            loadMaster(master, cache, noop);
+        });
 
     }
 
-    //entry point
-    reloadMaster(cache, function(){reloadTemplates(function(){callback(handler)});});
+    loadMaster(master, cache, function() {
+        loadTemplates(templates, cache, function() {
+            callback(handler);
+        });
+    });
 
-    
 };
 
 exports.connectDirHandler = function(master, dir, watch, callback) {
@@ -180,13 +255,18 @@ exports.connectDirHandler = function(master, dir, watch, callback) {
 
     if(watch) {
         var chokidar = require('chokidar');
-        chokidar.watch(dir).on('change', function(){reloadTemplates(cache, noop);});
-        chokidar.watch(master).on('change', function(){reloadMaster(cache, noop);});
+        chokidar.watch(dir).on('change', function() {
+            loadTemplatesDir(dir, cache, noop);
+        });
+        chokidar.watch(master).on('change', function() {
+            loadMaster(master, cache, noop);
+        });
 
     }
 
-    //entry point
-    reloadMaster(cache, function(){reloadTemplates(function(){callback(handler)});});
-
-
+    loadMaster(master, cache, function() {
+        loadTemplatesDir(dir, cache, function() {
+            callback(handler);
+        });
+    });
 };
