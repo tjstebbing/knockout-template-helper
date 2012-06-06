@@ -29,25 +29,31 @@ var loadMaster = function(master, cache, cb) {
     });
 };
 
-var loadTemplates = function(map, cache, cb) {
+var reloadTemplates = function(map, cache, cb) {
     loadTemplates(map, function(err, templates) {
-        if(err) cb(err);
-        cache.templates = templates;
-        cb();
+        if(err) {
+            cb(err);
+        } else {
+            cache.templates = templates;
+            cb();
+        }
     });
 };
 
-var loadTemplatesDir = function(dir, cache, cb) {
+var reloadTemplatesDir = function(dir, cache, cb) {
     loadTemplatesDir(dir, function(err, templates) {
-        if(err) cb(err);
-        cache.templates = templates;
-        cb();
+        if(err) {
+          cb(err);
+        } else {
+          cache.templates = templates;
+          cb();
+        }
     });
 };
 
 var parseTemplate = function(path, data, list, prefix) {
     if(!prefix) {
-        var prefix = slashdot(file.split('.')[0].split(dir)[1]);
+        var prefix = slashdot(path.split('.')[0].split(dir)[1]);
     }
     data = "<html><body>"+data+"</body></html>";
     try {
@@ -68,7 +74,7 @@ var parseTemplate = function(path, data, list, prefix) {
 var loadTemplates = function(map, cb) {
     var templates = [];
     var remap = _.map(map, function(v, k) { return [k, v]; });
-    async.each(remap, function(kv, acb) {
+    async.forEach(remap, function(kv, acb) {
         var prefix = kv[0], file = kv[1];
         fs.readFile(file, function(err, data) {
             if(err) {
@@ -78,7 +84,7 @@ var loadTemplates = function(map, cb) {
                 acb();
             }
         });
-    }, cb);
+    }, function() {cb(null, templates); });
 };
 
 var loadTemplatesDir = function(dir, cb) {
@@ -102,32 +108,32 @@ var loadTemplatesDir = function(dir, cb) {
 
 // API
 
-exports.flatten(master, templates, callback) {
+exports.flatten = function(master, templates, callback) {
     /* flattens a mapping of templates into a master template, callback is
      * fired with the result as a string */
     callback = callback ? callback : noop;
     var cache = newCache();
     loadMaster(master, cache, function() {
-        loadTemplates(templates, cache, function() {
+        reloadTemplates(templates, cache, function() {
             callback(processCache(cache));
         });
     });
 };
 
-exports.flattenDir(master, dir, callback) {
+exports.flattenDir = function(master, dir, callback) {
     /* flattens a mapping of templates into a master template, callback is
      * fired with the result as a string */
     callback = callback ? callback : noop;
     var cache = newCache();
     loadMaster(master, cache, function() {
-        loadTemplatesDir(dir, cache, function() {
+        reloadTemplatesDir(dir, cache, function() {
             callback(processCache(cache));
         });
     });
 };
 
 
-exports.watch(master, templates, callback) {
+exports.watch = function(master, templates, callback) {
     /* watch a mapping of templates and flatten them into a master
      * template, callback will be fired with the results as a string initially
      * and every time a file changes.
@@ -138,7 +144,7 @@ exports.watch(master, templates, callback) {
 
     _.each(templates, function(v) {
         chokidar.watch(v).on('change', function() {
-            loadTemplates(templates, cache, function() {
+            reloadTemplates(templates, cache, function() {
                 callback(processCache(cache));
             });
         });
@@ -151,7 +157,7 @@ exports.watch(master, templates, callback) {
     });
 
     loadMaster(master, cache, function() {
-        loadTemplates(templates, cache, function() {
+        reloadTemplates(templates, cache, function() {
             callback(processCache(cache));
         });
     });
@@ -159,7 +165,7 @@ exports.watch(master, templates, callback) {
 
 };
 
-exports.watchDir(master, dir, callback) {
+exports.watchDir = function(master, dir, callback) {
     /* watch a nested directory of templates and flatten them into a master
      * template, callback will be fired with the results as a string initially
      * and every time a file changes.
@@ -169,7 +175,7 @@ exports.watchDir(master, dir, callback) {
     var chokidar = require('chokidar');
 
     chokidar.watch(dir).on('change', function() {
-        loadTemplatesDir(dir, cache, function() {
+        reloadTemplatesDir(dir, cache, function() {
             callback(processCache(cache));
         });
     });
@@ -181,7 +187,7 @@ exports.watchDir(master, dir, callback) {
     });
 
     loadMaster(master, cache, function() {
-        loadTemplatesDir(dir, cache, function() {
+        reloadTemplatesDir(dir, cache, function() {
             callback(processCache(cache));
         });
     });
@@ -189,7 +195,7 @@ exports.watchDir(master, dir, callback) {
 };
 
 exports.connectHandler = function(master, templates, watch, callback) {
-    /* callback is passed a handler function which takes a request and a 
+    /* callback is passed a handler function which takes a request and a
      * response and can be mapped as a resource in connect/express apps.
      * If watch is true the handler will re-compile the resource when files
      * are changed.
@@ -199,12 +205,8 @@ exports.connectHandler = function(master, templates, watch, callback) {
 
     var handler = function(req, res) {
         if(watch || !cache.output) {
-            //we're either watching files or first-run, generate output
-            try {
-                processCache(cache);
-            } catch(e) {
-                throw e;
-            }
+          //we're either watching files or first-run, generate output
+          processCache(cache);
         }
         res.send(cache.output);
     }
@@ -214,7 +216,7 @@ exports.connectHandler = function(master, templates, watch, callback) {
 
         _.each(templates, function(v) {
             chokidar.watch(v).on('change', function() {
-                loadTemplates(templates, cache, noop);
+                reloadTemplates(templates, cache, noop);
             });
         });
 
@@ -225,15 +227,19 @@ exports.connectHandler = function(master, templates, watch, callback) {
     }
 
     loadMaster(master, cache, function() {
-        loadTemplates(templates, cache, function() {
+        reloadTemplates(templates, cache, function(err) {
+          if(err) {
+            console.log(err);
+          } else {
             callback(handler);
+          }
         });
     });
 
 };
 
 exports.connectDirHandler = function(master, dir, watch, callback) {
-    /* callback is passed a handler function which takes a request and a 
+    /* callback is passed a handler function which takes a request and a
      * response and can be mapped as a resource in connect/express apps.
      * If watch is true the handler will re-compile the resource when files
      * are changed.
@@ -256,7 +262,7 @@ exports.connectDirHandler = function(master, dir, watch, callback) {
     if(watch) {
         var chokidar = require('chokidar');
         chokidar.watch(dir).on('change', function() {
-            loadTemplatesDir(dir, cache, noop);
+            reloadTemplatesDir(dir, cache, noop);
         });
         chokidar.watch(master).on('change', function() {
             loadMaster(master, cache, noop);
@@ -265,8 +271,12 @@ exports.connectDirHandler = function(master, dir, watch, callback) {
     }
 
     loadMaster(master, cache, function() {
-        loadTemplatesDir(dir, cache, function() {
+        reloadTemplatesDir(dir, cache, function(err) {
+          if(err) {
+            console.log(err);
+          } else {
             callback(handler);
+          }
         });
     });
 };
