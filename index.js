@@ -1,9 +1,9 @@
 var fs = require('fs');
 var walker = require('walker');
-var et = require('elementtree');
 var _ = require('underscore');
 var async = require('async');
-
+var htmlparser = require("htmlparser2");
+var DomUtils = htmlparser.DomUtils;
 
 var slashdot = function(s) { return s.replace(/\/|\\/g, '.').replace('.',''); };
 var noop = function(){};
@@ -57,14 +57,16 @@ var parseTemplate = function(path, data, list, prefix) {
     }
     data = "<html><body>"+data+"</body></html>";
     try {
-        var etree = et.parse(data);
-        tpls = etree.findall('.//script');
+        var handler = new htmlparser.DomHandler(); // builds dom.
+        var parser = new htmlparser.Parser(handler); // parses html.
+        parser.parseComplete(data);
+        var tpls = DomUtils.getElementsByTagName('script', handler.dom, true);
         for(var i=0; i<tpls.length; i++) {
             var tpl = tpls[i];
-            var id = tpl.attrib['id'];
+            var id = tpl.attribs['id'];
             var newId = prefix + '.' + id;
-            tpl.attrib['id'] = newId;
-            list.push(et.tostring(tpl));
+            tpl.attribs['id'] = newId;
+            list.push(DomUtils.getOuterHTML(tpl));
         }
     } catch(e) {
         console.log("Failed to parse template", path, e);
